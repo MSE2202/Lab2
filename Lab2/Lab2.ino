@@ -1,13 +1,13 @@
 // 
-//  MSE 2202 Lab 2-Exercise 6
+//  MSE 2202 Lab 2-Exercise 7
 // 
-//  Uses a pushbutton to set the position of a DC gearmotor with integrated encoder
+//  Uses a potentiometer and pushbutton to control the position of a DC gearmotor with integrated encoder
 //  A simple PID controller is used to drive the motor to the target encoder value
 //
 //  Language: Arduino (C++)
 //  Target:   ESP32-S3
 //  Author:   Michael Naish
-//  Date:     2024 01 21 
+//  Date:     2024 01 22 
 //  
 //  To program and use ESP32-S3
 //   
@@ -64,7 +64,9 @@ struct Encoder {
 const int cHeartbeatInterval = 75;                 // heartbeat update interval, in milliseconds
 const int cSmartLED          = 21;                 // when DIP switch S1-4 is on, SMART LED is connected to GPIO21
 const int cSmartLEDCount     = 1;                  // number of Smart LEDs in use
-const long cDebounceDelay    = 150;                // switch debounce delay in milliseconds
+const int cPotPin            = 1;                  // when DIP switch S1-3 is on, pot (R1) is connected to GPIO1 (ADC1-0)
+const int cToggle1           = 3;                  // DIP switch S1-1
+const long cDebounceDelay    = 20;                 // switch debounce delay in milliseconds
 const int cIN1Pin = 35;                            // GPIO pin(s) for INT
 const int cIN1Chan = 0;                            // PWM channel for IN1
 const int c2IN2Pin = 36;                           // GPIO pin for IN2
@@ -88,6 +90,8 @@ Switch button = {0, 0, 0, false};                  // NO pushbutton PB1 on GPIO 
 Encoder encoder = {15, 16, 0};                     // encoder on GPIO 15 and 16, 0 position 
 unsigned long lastTime = 0;                        // last time of motor control was updated
 long target = 0;                                   // target encoder count for motor
+int upperLimit = 300;                              // upper encoder count for pot input mapping
+int lowerLimit = -300;                             // upper encoder count for pot input mapping
 
 // Declare SK6812 SMART LED object
 //   Argument 1 = Number of LEDs (pixels) in use
@@ -126,6 +130,9 @@ void setup() {
   // configure encoder to trigger interrupt with each rising edge on channel A
   attachInterruptArg(encoder.chanA, encoderISR, &encoder, RISING);
 
+  // Setup potentiometer
+  pinMode(cPotPin, INPUT);                         // configure potentiometer pin for input
+
   // Set up push button
   pinMode(button.pin, INPUT_PULLUP);               // configure GPIO for button pin as an input with pullup resistor
   attachInterruptArg(button.pin, switchISR, &button, CHANGE); // Configure pushbutton ISR to trigger on change
@@ -141,17 +148,27 @@ void loop() {
   float u = 0;                                     // PID control signal
   int pwm = 0;                                     // motor speed(s), represented in bit resolution
   int dir = 1;                                     // direction that motor should turn
-         
-  if (button.pressed) {                            // toggle setpoints on button press
-    if (target > 0) { 
-      target = 0;                                  // rotate to 0
-    }
-    else {
-      target = cCountsRev;                         // rotate one revolution
-    }
-    button.pressed = false;                        // reset flag
-  }
+  int shift = 0;                                   // amount to shift encoder range
+
+  int potVal = analogRead(cPotPin);                // read pot value (between 0 and 4095)
   
+  // With each button press, shift the encoder endpoints according to how far the read pot value is from the
+  // centre position. Allows motor shaft to be jogged past pot end points.
+  if (button.pressed) {
+    if (potVal < 2048) {                           // negative rotation
+      shift = map(potVal, 0, 2047, 300, 0);        // shift more towards 0
+      upperLimit -= shift;
+      lowerLimit -= shift;
+    }
+    else {                                         // positive rotation
+      shift = map(potVal, 2048, 4095, 0, 300);     // shift more towards 4095
+      upperLimit += shift;
+      lowerLimit += shift;
+    }
+    button.pressed = false;                        // clear button flag
+  }
+  target = map(potVal, 0, 4095, lowerLimit, upperLimit);  // set encoder target based on pot value and range
+
   // store encoder position to avoid conflicts with ISR updates
   noInterrupts();                                  // disable interrupts temporarily while reading
   pos = encoder.pos;                               // read and store current motor position
@@ -181,6 +198,7 @@ void loop() {
     }
     pwm = map(u, 0, cMaxSpeedInCounts, cMinPWM, cMaxPWM); // convert control signal to pwm
     setMotor(dir, pwm, cIN1Chan, cIN2Chan);        // update motor speed and direction
+
 #ifdef SERIAL_STUDIO
     Serial.printf("/*%d,%d,%d*/\r\n", target, pos, e); // target, actual, error
 #endif  
