@@ -179,6 +179,6 @@ After verifying the manual mode, modify the sketch such that the gearmotor can b
 | Exercise 4 | **10**        | 5    | —    | 5        |
 | Exercise 5 | **20**        | 10   | 5    | 5        |
 | Exercise 6 | **10**        | 5    | —    | 5        |
-| Exercise 7 | **25**        | 13   | 7    | 6        |
+| Exercise 7 | **25**        | 13   | 6    | 6        |
 | Exercise 8 | **10**        | 5    | 5    | —        |
 | BONUS      | **10**        | 5    | –    | 5        |
