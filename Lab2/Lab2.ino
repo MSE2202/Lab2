@@ -1,7 +1,8 @@
 // 
-//  MSE 2202 Lab 2-Exercise 4
+//  MSE 2202 Lab 2-Exercise 6
 // 
-//  Uses a potentiometer to set the position of an RC servo motor
+//  Uses a pushbutton to set the position of a DC gearmotor with integrated encoder
+//  A simple PID controller is used to drive the motor to the target encoder value
 //
 //  Language: Arduino (C++)
 //  Target:   ESP32-S3
@@ -12,6 +13,7 @@
 //   
 //  Tools->Board->Boards Manager...
 //    esp32 by Espressif v2.0.11
+//
 //  Tools->:
 //    Board: "Adafruit Feather ESP32-S3 No PSRAM"
 //    Upload Speed: "921600"
@@ -32,30 +34,60 @@
 //  button then release the program button 
 //
 
-//#define OUTPUT_ON                                    // uncomment to turn on output debugging information
+#define SERIAL_STUDIO                              // print formatted string, that can be captured and parsed by Serial-Studio
 
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
 
 // Function declarations
 void doHeartbeat();
-long degreesToDutyCycle(int deg);
+void setMotor(int dir, int pwm, int in1, int in2);
+void ARDUINO_ISR_ATTR switchISR(void* arg);
+void ARDUINO_ISR_ATTR encoderISR(void* arg);
+
+// Switch structure
+struct Switch {
+  const int pin;                                   // GPIO pin for switch
+  unsigned int numberPresses;                      // counter for number of switch presses
+  unsigned int lastPressTime;                      // time of last switch press in ms
+  bool pressed;                                    // flag for switch press event
+};
+
+// Encoder structure
+struct Encoder {
+  const int chanA;                                 // GPIO pin for encoder channel A
+  const int chanB;                                 // GPIO pin for encoder channel B
+  long pos;                                        // current encoder position
+};
 
 // Constants
 const int cHeartbeatInterval = 75;                 // heartbeat update interval, in milliseconds
 const int cSmartLED          = 21;                 // when DIP switch S1-4 is on, SMART LED is connected to GPIO21
 const int cSmartLEDCount     = 1;                  // number of Smart LEDs in use
-const int cPotPin            = 1;                  // when DIP switch S1-3 is on, pot (R1) is connected to GPIO1 (ADC1-0)
-const int cServoPin          = 41;                 // GPIO pin for servo motor
-const int cServoChannel      = 5;                  // PWM channel used for the RC servo motor
+const long cDebounceDelay    = 150;                // switch debounce delay in milliseconds
+const int cIN1Pin = 35;                            // GPIO pin(s) for INT
+const int cIN1Chan = 0;                            // PWM channel for IN1
+const int c2IN2Pin = 36;                           // GPIO pin for IN2
+const int cIN2Chan = 1;                            // PWM channel for IN2
+const int cPWMRes = 8;                             // bit resolution for PWM
+const int cMinPWM = 0;                             // PWM value for minimum speed that turns motor
+const int cMaxPWM = pow(2, cPWMRes) - 1;           // PWM value for maximum speed
+const int cPWMFreq = 20000;                        // frequency of PWM signal
+const int cCountsRev = 1096;                       // encoder pulses per motor revolution
+const int cMaxSpeedInCounts = 1600;                // maximum encoder counts/sec
+const float kp = 1.5;                              // proportional gain for PID
+const float ki = 2;                                // integral gain for PID
+const float kd = 0.2;                              // derivative gain for PID
 
 // Variables
 boolean heartbeatState       = true;               // state of heartbeat LED
 unsigned long lastHeartbeat  = 0;                  // time of last heartbeat state change
 unsigned long curMillis      = 0;                  // current time, in milliseconds
 unsigned long prevMillis     = 0;                  // start time for delay cycle, in milliseconds
-int potVal;                                        // input value from the potentiometer
-int servoPos;                                      // desired servo angle
+Switch button = {0, 0, 0, false};                  // NO pushbutton PB1 on GPIO 0, low state when pressed
+Encoder encoder = {15, 16, 0};                     // encoder on GPIO 15 and 16, 0 position 
+unsigned long lastTime = 0;                        // last time of motor control was updated
+long target = 0;                                   // target encoder count for motor
 
 // Declare SK6812 SMART LED object
 //   Argument 1 = Number of LEDs (pixels) in use
@@ -74,8 +106,8 @@ unsigned char LEDBrightnessLevels[] = {0, 0, 0, 5, 15, 30, 45, 60, 75, 90, 105, 
                                        150, 135, 120, 105, 90, 75, 60, 45, 30, 15, 5, 0};
 
 void setup() {
-#ifdef OUTPUT_ON
-    Serial.begin(115200);                            // Standard baud rate for ESP32 serial monitor
+#if defined SERIAL_STUDIO
+  Serial.begin(115200);                            // Standard baud rate for ESP32 serial monitor
 #endif
   // Set up SmartLED
   SmartLEDs.begin();                               // initialize smart LEDs object
@@ -84,26 +116,76 @@ void setup() {
   SmartLEDs.setBrightness(0);                      // set brightness [0-255]
   SmartLEDs.show();                                // update LED
 
-  // Setup potentiometer
-  pinMode(cPotPin, INPUT);                         // configure potentiometer pin for input
-  
-  // Set up servo
-  pinMode(cServoPin, OUTPUT);                      // configure servo GPIO for output
-  ledcSetup(cServoChannel, 50, 14);                // setup for channel for 50 Hz, 14-bit resolution
-  ledcAttachPin(cServoPin, cServoChannel);         // assign servo pin to servo channel
+  // Set up motors and encoders
+  ledcAttachPin(cIN1Pin, cIN1Chan);                // attach IN1 GPIO to PWM channel
+  ledcSetup(cIN1Chan, cPWMFreq, cPWMRes);          // configure PWM channel frequency and resolution
+  ledcAttachPin(c2IN2Pin, cIN2Chan);               // attach IN2 GPIO to PWM channel
+  ledcSetup(cIN2Chan, cPWMFreq, cPWMRes);          // configure PWM channel frequency and resolution
+  pinMode(encoder.chanA, INPUT);                   // configure GPIO for encoder channel A input
+  pinMode(encoder.chanB, INPUT);                   // configure GPIO for encoder channel B input
+  // configure encoder to trigger interrupt with each rising edge on channel A
+  attachInterruptArg(encoder.chanA, encoderISR, &encoder, RISING);
+
+  // Set up push button
+  pinMode(button.pin, INPUT_PULLUP);               // configure GPIO for button pin as an input with pullup resistor
+  attachInterruptArg(button.pin, switchISR, &button, CHANGE); // Configure pushbutton ISR to trigger on change
 }
 
 void loop() {
-  potVal = analogRead(cPotPin);                    // read the value of the potentiometer (value between 0 and 4095)
-  servoPos = map(potVal, 0, 4095, 0, 180);         // scale it into servo range 0 to 180 degrees
-  ledcWrite(cServoChannel, degreesToDutyCycle(servoPos)); // set the desired servo position
+  float deltaT = 0;                                // time interval
+  long pos = 0;                                    // current motor positions
+  long e = 0;                                      // position error
+  float ePrev = 0;                                 // previous position error
+  float dedt = 0;                                  // rate of change of position error (de/dt)
+  float eIntegral = 0;                             // integral of error 
+  float u = 0;                                     // PID control signal
+  int pwm = 0;                                     // motor speed(s), represented in bit resolution
+  int dir = 1;                                     // direction that motor should turn
+         
+  if (button.pressed) {                            // toggle setpoints on button press
+    if (target > 0) { 
+      target = 0;                                  // rotate to 0
+    }
+    else {
+      target = cCountsRev;                         // rotate one revolution
+    }
+    button.pressed = false;                        // reset flag
+  }
+  
+  // store encoder position to avoid conflicts with ISR updates
+  noInterrupts();                                  // disable interrupts temporarily while reading
+  pos = encoder.pos;                               // read and store current motor position
+  interrupts();                                    // turn interrupts back on
 
-//----------------------------------------------------------------------------------------------
-// Add comment(s) here to describe RC servo control signal, as observed on oscilloscope
-// 
-//
-//----------------------------------------------------------------------------------------------
+  unsigned long curTime = micros();                // capture current time in microseconds
+  if (curTime - lastTime > 10000) {                // wait ~10 ms
+    deltaT = ((float) (curTime - lastTime)) / 1.0e6; // compute actual time interval in seconds
+    lastTime = curTime;                            // update start time for next control cycle
+    // use PID to calculate control signal to motor
+    e = target - pos;                              // position error
+    dedt = ((float) e - ePrev) / deltaT;           // derivative of error
+    eIntegral = eIntegral + e * deltaT;            // integral of error (finite difference)
+    u = kp * e + kd * dedt + ki * eIntegral;       // compute PID-based control signal
+    ePrev = e;                                     // store error for next control cycle
+  
+    // set direction based on computed control signal
+    dir = 1;                                       // default to forward directon
+    if (u < 0) {                                   // if control signal is negative
+      dir = -1;                                    // set direction to reverse
+    }
 
+    // set speed based on computed control signal
+    u = fabs(u);                                   // get magnitude of control signal
+    if (u > cMaxSpeedInCounts) {                   // if control signal will saturate motor
+      u = cMaxSpeedInCounts;                       // impose upper limit
+    }
+    pwm = map(u, 0, cMaxSpeedInCounts, cMinPWM, cMaxPWM); // convert control signal to pwm
+    setMotor(dir, pwm, cIN1Chan, cIN2Chan);        // update motor speed and direction
+#ifdef SERIAL_STUDIO
+    Serial.printf("/*%d,%d,%d*/\r\n", target, pos, e); // target, actual, error
+#endif  
+  }
+  
   doHeartbeat();                                   // update heartbeat LED
 }
 
@@ -123,19 +205,47 @@ void doHeartbeat() {
   }
 }
 
-// Converts servo position in degrees into the required duty cycle for an RC servo motor control signal 
-// assuming 14-bit resolution (i.e., value represented as fraction of 16383). 
-// Note that the constants for minimum and maximum duty cycle may need to be adjusted for a specific motor
-long degreesToDutyCycle(int deg) {
-  const long cMinDutyCycle = 400;                     // duty cycle for 0 degrees
-  const long cMaxDutyCycle = 2100;                    // duty cycle for 180 degrees
+// send motor control signals, based on direction and pwm (speed)
+void setMotor(int dir, int pwm, int in1, int in2) {
+  if (dir == 1) {                                  // forward
+    ledcWrite(in1, pwm);
+    ledcWrite(in2, 0);
+  }
+  else if (dir == -1) {                            // reverse
+    ledcWrite(in1, 0);
+    ledcWrite(in2, pwm);
+  }
+  else {                                           // stop
+    ledcWrite(in1, 0);
+    ledcWrite(in2, 0);
+  }
+}
 
-  long dutyCycle = map(deg, 0, 180, cMinDutyCycle, cMaxDutyCycle);  // convert to duty cycle
+// switch interrupt service routine
+// argument is pointer to switch structure, which is statically cast to a Switch structure, 
+// allowing multiple instances of the buttonISR to be created (1 per button)
+void ARDUINO_ISR_ATTR switchISR(void* arg) {
+  Switch* s = static_cast<Switch*>(arg);           // cast pointer to static structure
 
-#ifdef OUTPUT_ON
-  float percent = dutyCycle * 0.0061039;              // (dutyCycle / 16383) * 100
-  Serial.printf("Degrees %d, Duty Cycle Val: %ld = %f%%\n", servoPos, dutyCycle, percent);
-#endif
+  uint32_t pressTime = millis();                   // capture current time
+  if (pressTime - s->lastPressTime > cDebounceDelay) { // if enough time has passed to consider a valid press
+    s->numberPresses += 1;                         // increment switch press counter
+    s->pressed = true;                             // indicate valid switch press state
+    s->lastPressTime = pressTime;                  // update time to measure next press against
+  }
+}
 
-  return dutyCycle;
+// encoder interrupt service routine
+// argument is pointer to an encoder structure, which is statically cast to a Encoder structure, allowing multiple
+// instances of the encoderISR to be created (1 per encoder)
+void ARDUINO_ISR_ATTR encoderISR(void* arg) {
+  Encoder* s = static_cast<Encoder*>(arg);         // cast pointer to static structure
+  
+  int b = digitalRead(s->chanB);                   // read state of channel B
+  if (b > 0) {                                     // high, leading channel A
+    s->pos++;                                      // increase position
+  }
+  else {                                           // low, lagging channel A
+    s->pos--;                                      // decrease position
+  }
 }
