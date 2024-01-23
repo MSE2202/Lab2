@@ -1,7 +1,7 @@
 // 
-//  MSE 2202 Lab 2-Exercise 2
+//  MSE 2202 Lab 2-Exercise 4
 // 
-//  Uses an external interrupt to count the number of times a (debounced) button/limit switch is pressed
+//  Uses a potentiometer to set the position of an RC servo motor
 //
 //  Language: Arduino (C++)
 //  Target:   ESP32-S3
@@ -12,7 +12,6 @@
 //   
 //  Tools->Board->Boards Manager...
 //    esp32 by Espressif v2.0.11
-//
 //  Tools->:
 //    Board: "Adafruit Feather ESP32-S3 No PSRAM"
 //    Upload Speed: "921600"
@@ -33,34 +32,30 @@
 //  button then release the program button 
 //
 
-#define SWITCH_OUTPUT_ON                           // uncomment to turn off output of switch state information
+//#define OUTPUT_ON                                    // uncomment to turn on output debugging information
 
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
 
 // Function declarations
 void doHeartbeat();
-void ARDUINO_ISR_ATTR switchISR(void* arg);
-
-// Switch structure
-struct Switch {
-  const int pin;                                   // GPIO pin for switch
-  uint32_t numberPresses;                          // counter for number of switch presses
-  uint32_t lastPressTime;                          // time of last press in milliseconds
-  bool pressed;                                    // state variable to indicate "valid" switch press
-};
+long degreesToDutyCycle(int deg);
 
 // Constants
 const int cHeartbeatInterval = 75;                 // heartbeat update interval, in milliseconds
 const int cSmartLED          = 21;                 // when DIP switch S1-4 is on, SMART LED is connected to GPIO21
 const int cSmartLEDCount     = 1;                  // number of Smart LEDs in use
-const long cDebounceDelay    = 175;                // switch debounce delay in milliseconds
+const int cPotPin            = 1;                  // when DIP switch S1-3 is on, pot (R1) is connected to GPIO1 (ADC1-0)
+const int cServoPin          = 41;                 // GPIO pin for servo motor
+const int cServoChannel      = 5;                  // PWM channel used for the RC servo motor
 
 // Variables
 boolean heartbeatState       = true;               // state of heartbeat LED
 unsigned long lastHeartbeat  = 0;                  // time of last heartbeat state change
 unsigned long curMillis      = 0;                  // current time, in milliseconds
 unsigned long prevMillis     = 0;                  // start time for delay cycle, in milliseconds
+int potVal;                                        // input value from the potentiometer
+int servoPos;                                      // desired servo angle
 
 // Declare SK6812 SMART LED object
 //   Argument 1 = Number of LEDs (pixels) in use
@@ -78,11 +73,9 @@ unsigned char LEDBrightnessIndex = 0;
 unsigned char LEDBrightnessLevels[] = {0, 0, 0, 5, 15, 30, 45, 60, 75, 90, 105, 120, 135, 
                                        150, 135, 120, 105, 90, 75, 60, 45, 30, 15, 5, 0};
 
-Switch limitSwitch           = {4, 0, 0, false};   // limit switch on GPIO4, 0 count, not pressed
-
 void setup() {
-#if defined SWITCH_OUTPUT_ON
-  Serial.begin(115200);
+#ifdef OUTPUT_ON
+    Serial.begin(115200);                            // Standard baud rate for ESP32 serial monitor
 #endif
   // Set up SmartLED
   SmartLEDs.begin();                               // initialize smart LEDs object
@@ -91,19 +84,26 @@ void setup() {
   SmartLEDs.setBrightness(0);                      // set brightness [0-255]
   SmartLEDs.show();                                // update LED
 
-  // Setup limit switch
-  pinMode(limitSwitch.pin, INPUT_PULLUP);          // congifure GPIO for limit switch as input with internal pullup resistor 
-  attachInterruptArg(limitSwitch.pin, switchISR, &limitSwitch, FALLING); // Configure ISR to trigger on low signal on pin
+  // Setup potentiometer
+  pinMode(cPotPin, INPUT);                         // configure potentiometer pin for input
+  
+  // Set up servo
+  pinMode(cServoPin, OUTPUT);                      // configure servo GPIO for output
+  ledcSetup(cServoChannel, 50, 14);                // setup for channel for 50 Hz, 14-bit resolution
+  ledcAttachPin(cServoPin, cServoChannel);         // assign servo pin to servo channel
 }
 
 void loop() {
-  if (limitSwitch.pressed) {                       // if state of limit switch changed
-#ifdef SWITCH_OUTPUT_ON
-    Serial.printf("Limit switch pressed %u times\n", limitSwitch.numberPresses);
-#endif
-    limitSwitch.pressed = false;                   // reset switch state
-  }
- 
+  potVal = analogRead(cPotPin);                    // read the value of the potentiometer (value between 0 and 4095)
+  servoPos = map(potVal, 0, 4095, 0, 180);         // scale it into servo range 0 to 180 degrees
+  ledcWrite(cServoChannel, degreesToDutyCycle(servoPos)); // set the desired servo position
+
+//----------------------------------------------------------------------------------------------
+// Add comment(s) here to describe RC servo control signal, as observed on oscilloscope
+// 
+//
+//----------------------------------------------------------------------------------------------
+
   doHeartbeat();                                   // update heartbeat LED
 }
 
@@ -123,18 +123,19 @@ void doHeartbeat() {
   }
 }
 
-// switch interrupt service routine
-// argument is pointer to switch structure, which is statically cast to a Switch structure, 
-// allowing multiple instances of the buttonISR to be created (1 per button)
-void ARDUINO_ISR_ATTR switchISR(void* arg) {
-  Switch* s = static_cast<Switch*>(arg);              // cast pointer to static structure
+// Converts servo position in degrees into the required duty cycle for an RC servo motor control signal 
+// assuming 14-bit resolution (i.e., value represented as fraction of 16383). 
+// Note that the constants for minimum and maximum duty cycle may need to be adjusted for a specific motor
+long degreesToDutyCycle(int deg) {
+  const long cMinDutyCycle = 400;                     // duty cycle for 0 degrees
+  const long cMaxDutyCycle = 2100;                    // duty cycle for 180 degrees
 
-  uint32_t pressTime = millis();                      // capture current time
-  if (pressTime - s->lastPressTime > cDebounceDelay) { // if enough time has passed to consider a valid press
-    s->numberPresses += 1;                            // increment switch press counter
-    s->pressed = true;                                // indicate valid switch press state
-    s->lastPressTime = pressTime;                     // update time to measure next press against
-  }
+  long dutyCycle = map(deg, 0, 180, cMinDutyCycle, cMaxDutyCycle);  // convert to duty cycle
+
+#ifdef OUTPUT_ON
+  float percent = dutyCycle * 0.0061039;              // (dutyCycle / 16383) * 100
+  Serial.printf("Degrees %d, Duty Cycle Val: %ld = %f%%\n", servoPos, dutyCycle, percent);
+#endif
+
+  return dutyCycle;
 }
-
-
