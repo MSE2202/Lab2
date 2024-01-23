@@ -1,7 +1,7 @@
 // 
-//  MSE 2202 Lab 2-Exercise 1
+//  MSE 2202 Lab 2-Exercise 2
 // 
-//  Uses an external interrupt to count the number of times a button/limit switch is pressed
+//  Uses an external interrupt to count the number of times a (debounced) button/limit switch is pressed
 //
 //  Language: Arduino (C++)
 //  Target:   ESP32-S3
@@ -33,7 +33,7 @@
 //  button then release the program button 
 //
 
-#define SWITCH_OUTPUT_ON                           // comment to turn off output of switch state information
+#define SWITCH_OUTPUT_ON                           // uncomment to turn off output of switch state information
 
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
@@ -46,6 +46,7 @@ void ARDUINO_ISR_ATTR switchISR(void* arg);
 struct Switch {
   const int pin;                                   // GPIO pin for switch
   uint32_t numberPresses;                          // counter for number of switch presses
+  uint32_t lastPressTime;                          // time of last press in milliseconds
   bool pressed;                                    // state variable to indicate "valid" switch press
 };
 
@@ -53,6 +54,7 @@ struct Switch {
 const int cHeartbeatInterval = 75;                 // heartbeat update interval, in milliseconds
 const int cSmartLED          = 21;                 // when DIP switch S1-4 is on, SMART LED is connected to GPIO21
 const int cSmartLEDCount     = 1;                  // number of Smart LEDs in use
+const long cDebounceDelay    = 175;                // switch debounce delay in milliseconds
 
 // Variables
 boolean heartbeatState       = true;               // state of heartbeat LED
@@ -76,7 +78,7 @@ unsigned char LEDBrightnessIndex = 0;
 unsigned char LEDBrightnessLevels[] = {0, 0, 0, 5, 15, 30, 45, 60, 75, 90, 105, 120, 135, 
                                        150, 135, 120, 105, 90, 75, 60, 45, 30, 15, 5, 0};
 
-Switch limitSwitch           = {4, 0, false};      // limit switch on GPIO4, 0 count, not pressed
+Switch limitSwitch           = {4, 0, 0, false};   // limit switch on GPIO4, 0 count, not pressed
 
 void setup() {
 #if defined SWITCH_OUTPUT_ON
@@ -127,6 +129,12 @@ void doHeartbeat() {
 void ARDUINO_ISR_ATTR switchISR(void* arg) {
   Switch* s = static_cast<Switch*>(arg);              // cast pointer to static structure
 
-  s->numberPresses += 1;                              // increment switch press counter
-  s->pressed = true;                                  // indicate valid switch press state
+  uint32_t pressTime = millis();                      // capture current time
+  if (pressTime - s->lastPressTime > cDebounceDelay) { // if enough time has passed to consider a valid press
+    s->numberPresses += 1;                            // increment switch press counter
+    s->pressed = true;                                // indicate valid switch press state
+    s->lastPressTime = pressTime;                     // update time to measure next press against
+  }
 }
+
+
