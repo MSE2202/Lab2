@@ -185,6 +185,11 @@ void loop() {
     Serial.printf("/*%d,%d,%d*/\r\n", target, pos, e); // target, actual, error
 #endif  
   }
+//----------------------------------------------------------------------------------------------
+// Add comment(s) here to describe motor control signals, as observed on oscilloscope
+// 
+//
+//----------------------------------------------------------------------------------------------
   
   doHeartbeat();                                   // update heartbeat LED
 }
