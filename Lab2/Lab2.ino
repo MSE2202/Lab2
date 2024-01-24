@@ -135,7 +135,7 @@ void setup() {
 
   // Set up push button
   pinMode(button.pin, INPUT_PULLUP);               // configure GPIO for button pin as an input with pullup resistor
-  attachInterruptArg(button.pin, switchISR, &button, CHANGE); // Configure pushbutton ISR to trigger on change
+  attachInterruptArg(button.pin, switchISR, &button, FALLING); // Configure ISR to trigger on low signal on pin
 }
 
 void loop() {
