@@ -127,8 +127,15 @@ After verifying the manual mode, modify the sketch such that the gearmotor can b
    * LED1 should be turned on when either limit switch is engaged.
    * LED2 should be turned on when the system is in auto mode but not calibrated.
 
+A demonstration of Exercise 7 may be seen in the video below.
+
+[![MSE 2202 Lab 2 Exercise 7](https://img.youtube.com/vi/hwv6iqd0ICI/0.jpg)](https://www.youtube.com/watch?v=hwv6iqd0ICI&t=3s "MSE 2202 Lab 2 Exercise 7")
+
 8. Create a new branch, named **exercise8**, and switch to it. *Merge* your code from Exercise 5 and Exercise 7 (Hint: you will likely have to resolve conflicts). The result should be a sketch controls both the DC gearmotor and RC servo motor simultaneously, with PB1 controlling the RC servo and the potentiometer and limit switches controlling the DC gearmotor. Show your operating circuit to a TA. If you have not done so already, be sure to __*push your respository back to GitHub*__.  __**Failure to do so will result in a grade of 0 for the lab.**__
 
+A demonstration of Exercise 8 may be seen in the video below.
+
+[![MSE 2202 Lab 2 Exercise 8](https://img.youtube.com/vi/hwv6iqd0ICI/0.jpg)](https://www.youtube.com/watch?v=hwv6iqd0ICI&t=16s "MSE 2202 Lab 2 Exercise 8")
 
 #### BONUS 
 
