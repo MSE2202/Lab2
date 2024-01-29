@@ -127,32 +127,24 @@ After verifying the manual mode, modify the sketch such that the gearmotor can b
    * LED1 should be turned on when either limit switch is engaged.
    * LED2 should be turned on when the system is in auto mode but not calibrated.
 
-A demonstration of Exercise 7 may be seen in the video below.
-
-[![MSE 2202 Lab 2 Exercise 7](https://img.youtube.com/vi/hwv6iqd0ICI/0.jpg)](https://www.youtube.com/watch?v=hwv6iqd0ICI&t=3s "MSE 2202 Lab 2 Exercise 7")
-
 8. Create a new branch, named **exercise8**, and switch to it. *Merge* your code from Exercise 5 and Exercise 7 (Hint: you will likely have to resolve conflicts). The result should be a sketch controls both the DC gearmotor and RC servo motor simultaneously, with PB1 controlling the RC servo and the potentiometer and limit switches controlling the DC gearmotor. Show your operating circuit to a TA. If you have not done so already, be sure to __*push your respository back to GitHub*__.  __**Failure to do so will result in a grade of 0 for the lab.**__
 
-A demonstration of Exercise 8 may be seen in the video below.
-
-[![MSE 2202 Lab 2 Exercise 8](https://img.youtube.com/vi/hwv6iqd0ICI/0.jpg)](https://www.youtube.com/watch?v=hwv6iqd0ICI&t=16s "MSE 2202 Lab 2 Exercise 8")
 
 #### BONUS 
 
 - Once again, checkout the **exercise6** branch. Create a new branch, named **bonus** and switch to it.  While the Serial Monitor may be used to observe the motor operating parameters, this exercise will use a much more powerful tool called [Serial Studio](https://serial-studio.github.io). You will have to download and install Serial Studio on your computer. Launch the application and configure it to visualize the target position, actual position, and position error for both motors, as follows:
 
-   1. Click the "Select project file..." button in the Setup pane. Navigate to your cloned repository and select **lab4-serial-studio-dashboard.json**. This will load a preconfigured dashboard that plots the motor positions and errors.
-      2. Ensure that the baud rate is set to 115200.
-      3. Select the correct COM port (same as used for programming—make sure that the Arduino IDE (or other GUI/IDE) is not monitoring the serial port).
-      4. Click the green "Connect" button at the top right.
-      5. Click the "Dashboard" button at the top left.
+   1. Click the "Select project file..." button in the Setup pane. Navigate to your cloned repository and select **lab2-serial-studio-dashboard.json**. This will load a preconfigured dashboard that plots the motor positions and errors.
+   2. Ensure that the baud rate is set to 115200.
+   3. Select the correct COM port (same as used for programming—make sure that the Arduino IDE (or other GUI/IDE) is not monitoring the serial port).
+   4. Click the green "Connect" button at the top right.
+   5. Click the "Dashboard" button at the top left.
+   
    ![Serial Studio configuration](docs/Serial_Studio_config.png)
 
-   Observe the response of the DC motors. When finished, press the red "Disconnect" button at the top right to release the serial port. This will allow new code to be uploaded to the ESP32. The PID gains `kp`, `ki`, and `kd` can be altered to observe the impact on performance. Try to the PID gains for maximum speed and/or accuracy. What trade offs need to be made to optimize for one other the other?
- 
-   Note that, the raw data sent to Serial Studio can be observed by clicking the "<> Console" button at the top left. The dashboard configuration can be adjusted by clicking the "{} JSON Editor" button at the top right. Serial Studio also allows all data to be saved to a .csv file. Further information may be found [here](https://github.com/Serial-Studio/Serial-Studio/wiki).
+   Again, Pressing PB1 will update the target position (in encoder counts) for the motor, toggling between 0 (starting angle) and `cCountsRev` (= 1096) for a full rotation. Subsequent button presses can occur immediately (i.e., the target is updated whether it has been reached or not). Observe the response of the DC motor. When finished, press the red "Disconnect" button at the top right to release the serial port. This will allow new code to be uploaded to the ESP32. If desired, the PID gains `kp`, `ki`, and `kd` can be altered to observe the impact on performance. 
 
-   Make clear comments to the code that describe the effect of different PID paramters. Commit your changes and push your repository back to GitHub and show your operating circuit to a TA.
+   Note that, the raw data sent to Serial Studio can be observed by clicking the "<> Console" button at the top left. The dashboard configuration can be adjusted by clicking the "{} JSON Editor" button at the top right. Serial Studio also allows all data to be saved to a .csv file. Further information may be found [here](https://github.com/Serial-Studio/Serial-Studio/wiki)
 
 ### Other Things to Explore
 
