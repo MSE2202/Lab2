@@ -84,6 +84,11 @@ Alternatively, you may use a graphical user interface such as [SourceTree](https
    
    When the pushbutton is not pressed the RC servo motor position should be ~30° and when pressed it should be ~150°. Once everything is working properly, commit your changes and push your repository back to GitHub. Show your operating circuit to a TA before proceeding to the next exercise.
 
+A demonstration of Exercise 5 may be seen in the video below.
+
+[![MSE 2202 Lab 2 Exercise 5](https://img.youtube.com/vi/U6sTiDc-X2Q/0.jpg)](https://www.youtube.com/watch?v=U6sTiDc-X2Q&t=3s "MSE 2202 Lab 2 Exercise 5")
+
+
 6. Add an MX1508 DC motor driver and DC gearmotor to the circuit, as shown in the schematic below. *Do not disconnect any of the components used for Exercises 1–5.* The MX1508 connects directly to the MSEduino, supplying it with 5 VDC. IN1 is connected to GPIO35 and IN2 is connected to GPIO36. Connect the M1 (white) wire and M2 (red) wire to the MOTOR-A pins on the MX1508. Connect C1 (green wire) to GPIO15 and C2 (yellow wire) to GPIO16. The encoder VCC (black wire) should be connected to 3.3 VDC and GND (indigo wire) to ground. All wire colours refer to those at the motor—the extensions soldered in Lab 1 will likley be different colours. **Be very careful to not connect the encoder VCC to 5 VDC.** 
  
    ![Exercise 6 schematic](docs/Lab2_6_schematic.png)
@@ -129,13 +134,13 @@ After verifying the manual mode, modify the sketch such that the gearmotor can b
 
 A demonstration of Exercise 7 may be seen in the video below.
 
-[![MSE 2202 Lab 2 Exercise 7](https://img.youtube.com/vi/hwv6iqd0ICI/0.jpg)](https://www.youtube.com/watch?v=hwv6iqd0ICI&t=3s "MSE 2202 Lab 2 Exercise 7")
+[![MSE 2202 Lab 2 Exercise 7](https://img.youtube.com/vi/U6sTiDc-X2Q/0.jpg)](https://www.youtube.com/watch?v=U6sTiDc-X2Q&t=9s "MSE 2202 Lab 2 Exercise 7")
 
 8. Create a new branch, named **exercise8**, and switch to it. *Merge* your code from Exercise 5 and Exercise 7 (Hint: you will likely have to resolve conflicts). The result should be a sketch controls both the DC gearmotor and RC servo motor simultaneously, with PB1 controlling the RC servo and the potentiometer and limit switches controlling the DC gearmotor. Show your operating circuit to a TA. If you have not done so already, be sure to __*push your respository back to GitHub*__.  __**Failure to do so will result in a grade of 0 for the lab.**__
 
 A demonstration of Exercise 8 may be seen in the video below.
 
-[![MSE 2202 Lab 2 Exercise 8](https://img.youtube.com/vi/hwv6iqd0ICI/0.jpg)](https://www.youtube.com/watch?v=hwv6iqd0ICI&t=16s "MSE 2202 Lab 2 Exercise 8")
+[![MSE 2202 Lab 2 Exercise 8](https://img.youtube.com/vi/U6sTiDc-X2Q/0.jpg)](https://www.youtube.com/watch?v=U6sTiDc-X2Q&t=22s "MSE 2202 Lab 2 Exercise 8")
 
 #### BONUS 
 
